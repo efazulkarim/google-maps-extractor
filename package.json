@@ -1,0 +1,15 @@
+{
+    "name": "google-maps-scraper-local",
+    "version": "2.0.1",
+    "description": "Extract B2B local leads from Google Maps result pages. Local-only fork. TypeScript sources compile to the JS the manifest loads.",
+    "private": true,
+    "scripts": {
+        "build": "tsc",
+        "watch": "tsc --watch",
+        "typecheck": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "@types/chrome": "^0.0.268",
+        "typescript": "^5.4.5"
+    }
+}

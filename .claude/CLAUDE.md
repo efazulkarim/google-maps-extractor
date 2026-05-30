@@ -35,10 +35,34 @@ auth/fetch cookie helpers — it is NOT a dedup utility.
   reloaded on startup (survives a Maps reload); `leads_lnglat` is re-seeded
   from stored placeIDs so dedup spans sessions/searches.
 
+## Build (TypeScript)
+
+Sources are TypeScript under `src/`, compiled with plain `tsc` to the exact
+`.js` paths the manifest loads (built `.js` is committed so the extension loads
+without a build step).
+
+- `src/contentScript.ts`     → `contentScript.js`
+- `src/contentScript2.ts`    → `contentScript2.js`
+- `src/injected.ts`          → `injected.js`
+- `src/bg.ts`                → `bg.js`
+- `src/js/mybg.ts`           → `js/mybg.js`
+- `src/js/popup.ts`          → `js/popup.js`
+- `src/js/dashboard.ts`      → `js/dashboard.js`
+
+Commands: `npm run build` (tsc), `npm run watch`, `npm run typecheck`.
+Config: `tsconfig.json` uses `module: "none"` + `rootDir: src`, `outDir: .`, so
+each source emits a classic (non-module) script at the mirrored path. Each
+source file wraps its body in an IIFE so top-level names don't collide in the
+shared global scope. Shared ambient types live in `src/global.d.ts` (`Lead`,
+the `XMLHttpRequest._url`/`_method` augmentation, `Tabulator`/`XLSX` globals).
+
+After editing any `src/*.ts`, run `npm run build` and commit the regenerated
+`.js`. Do not hand-edit the emitted `.js` — they are build output.
+
 ## Conventions
 
-- Vanilla JS, no build step. The shipped JS is Google-Closure-minified; match
-  the surrounding style and keep the fixed array-index parsing untouched.
-- Keep diffs minimal; preserve the XHR-intercept architecture.
+- Keep diffs minimal; preserve the XHR-intercept architecture and the fixed
+  Maps array-index parsing in `parseEntry`.
+- `lib/` and `auth/` remain plain JS (vendor / not part of the TS build).
 - IMPORTANT: this repo's working tree had no reachable `.git` during setup —
   do not rely on `git checkout` to undo edits here.

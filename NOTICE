@@ -1,0 +1,10 @@
+Google Maps Scraper (Local Fork)
+Copyright 2026 Kazi Efazul Karim
+
+Forked from github.com/LeadGenerationTools/google-maps-extractor (Apache-2.0).
+This fork removes remote authentication, quota gating, and telemetry to run fully locally.
+
+Third-party libraries bundled in lib/:
+- jQuery 3.1.1 — MIT — (c) jQuery Foundation  [REMOVED in v2.0.1]
+- Tabulator — MIT — (c) Oli Folkerd — http://tabulator.info
+- SheetJS xlsx (Community Edition) — Apache-2.0 — (c) SheetJS LLC — https://sheetjs.com

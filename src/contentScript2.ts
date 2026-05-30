@@ -1,4 +1,3 @@
-"use strict";
 // Injects injected.js into the page's main world at document_start.
 (() => {
     const script = document.createElement("script");

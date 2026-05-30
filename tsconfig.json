@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "none",
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "rootDir": "src",
+        "outDir": ".",
+        "strict": true,
+        "noImplicitAny": false,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "removeComments": false,
+        "sourceMap": false,
+        "types": ["chrome"]
+    },
+    "include": ["src/**/*"],
+    "exclude": ["node_modules", "lib", "auth", "screenshot"]
+}

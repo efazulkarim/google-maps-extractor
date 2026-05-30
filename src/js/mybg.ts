@@ -1,9 +1,25 @@
-"use strict";
 // Background logic (loaded into the service worker via importScripts).
 // Handles: openPage (store leads + open dashboard), access (fetch a URL),
 // email (scrape emails/socials from a lead's website).
 (() => {
-    const CCTLDS = new Set(("ac ad ae af ag ai al am an ao aq ar as at au aw ax az ba bb bd be bf bg bh bi bj bm bn bo " +
+    interface ResultSet {
+        instagram: Set<string>;
+        facebook: Set<string>;
+        youtube: Set<string>;
+        linkedin: Set<string>;
+        twitter: Set<string>;
+        yelp: Set<string>;
+        email: Set<string>;
+        [key: string]: Set<string>;
+    }
+
+    interface BgMessage {
+        action: string;
+        data: any;
+    }
+
+    const CCTLDS = new Set((
+        "ac ad ae af ag ai al am an ao aq ar as at au aw ax az ba bb bd be bf bg bh bi bj bm bn bo " +
         "br bs bt bv bw by bz ca cc cd cf cg ch ci ck cl cm cn co cr cu cv cw cx cy cz de dj dk dm " +
         "do dz ec ee eg eh er es et eu fi fj fk fm fo fr ga gb gd ge gf gg gh gi gl gm gn gp gq gr " +
         "gs gt gu gw gy hk hm hn hr ht hu id ie il im in io iq ir is it je jm jo jp ke kg kh ki km " +
@@ -11,9 +27,14 @@
         "mq mr ms mt mu mv mw mx my mz na nc ne nf ng ni nl no np nr nu nz om pa pe pf pg ph pk pl " +
         "pm pn pr ps pt pw py qa re ro rs ru rw sa sb sc sd se sg sh si sj sk sl sm sn so sr ss st " +
         "su sv sx sy sz tc td tf tg th tj tk tl tm tn to tr tt tv tw tz ua ug uk us uy uz va vc ve " +
-        "vg vi vn vu wf ws xk ye yt za zm zw").split(" "));
-    const BLACKLISTED_PATHS = new Set("/reel /about /tr /privacy /download /pg /settings /vp /profiles".split(" "));
-    const SOCIAL_MEDIA_PLATFORMS = {
+        "vg vi vn vu wf ws xk ye yt za zm zw"
+    ).split(" "));
+
+    const BLACKLISTED_PATHS = new Set(
+        "/reel /about /tr /privacy /download /pg /settings /vp /profiles".split(" ")
+    );
+
+    const SOCIAL_MEDIA_PLATFORMS: Record<string, RegExp> = {
         instagram: /(((http|https):\/\/)?((www\.)?(?:instagram.com|instagr.am)\/([A-Za-z0-9_.]{2,30})))/ig,
         facebook: /(?:https?:)?\/\/(?:www\.)?(?:facebook|fb)\.com\/((?![A-z]+\.php)(?!marketplace|gaming|watch|me|messages|help|search|groups)[A-z0-9_\-\.]+)\/?/ig,
         youtube: /(?:https?:)?\/\/(?:[A-z]+\.)?youtube\.com\/(channel\/([A-z0-9-_]+)|user\/([A-z0-9]+))\/?/ig,
@@ -22,40 +43,51 @@
         yelp: /https?:\/\/(?:www\.)?yelp\.com\/biz\/[a-zA-Z0-9_-]+/ig,
         email: /\b[A-Z0-9._%+-]{1,64}@(?!-)(?:[A-Z0-9-]+\.)+[A-Z]{2,63}\b/gi,
     };
-    const CONTACT_PAGE_PATHS = ("/contact /contact-us /contact-me /about /about-me /about-us /team /our-team " +
-        "/meet-the-team /support /customer-service /feedback /help /sales /return /location /faq").split(" ");
-    const EMAIL_BLACKLIST = new Set(".png .jpg .jpeg .gif .webp wixpress.com sentry.io noreply abuse no-reply subscribe " +
-        "mailer-daemon domain.com email.com yourname wix.com".split(" "));
+
+    const CONTACT_PAGE_PATHS = (
+        "/contact /contact-us /contact-me /about /about-me /about-us /team /our-team " +
+        "/meet-the-team /support /customer-service /feedback /help /sales /return /location /faq"
+    ).split(" ");
+
+    const EMAIL_BLACKLIST = new Set(
+        ".png .jpg .jpeg .gif .webp wixpress.com sentry.io noreply abuse no-reply subscribe " +
+        "mailer-daemon domain.com email.com yourname wix.com".split(" ")
+    );
+
     const SOCIAL_MEDIA_DOMAINS = new Set(["instagram", "facebook", "youtube", "linkedin", "twitter", "yelp"]);
+
     const FETCH_TIMEOUT_MS = 10000;
     const MAX_CONCURRENT_FETCHES = 5;
     const FETCH_DELAY_MS = 250;
+
     let activeFetches = 0;
-    const fetchQueue = [];
-    function acquireFetchSlot() {
+    const fetchQueue: Array<() => void> = [];
+
+    function acquireFetchSlot(): Promise<void> {
         return new Promise((resolve) => {
             const tryAcquire = () => {
                 if (activeFetches < MAX_CONCURRENT_FETCHES) {
                     activeFetches += 1;
                     resolve();
-                }
-                else {
+                } else {
                     fetchQueue.push(tryAcquire);
                 }
             };
             tryAcquire();
         });
     }
-    function releaseFetchSlot() {
+
+    function releaseFetchSlot(): void {
         activeFetches -= 1;
         const next = fetchQueue.shift();
-        if (next)
-            setTimeout(next, FETCH_DELAY_MS);
+        if (next) setTimeout(next, FETCH_DELAY_MS);
     }
-    function timestamp() {
+
+    function timestamp(): string {
         return `[${new Date().toISOString()}]`;
     }
-    function decodeCloudflareEmail(encoded) {
+
+    function decodeCloudflareEmail(encoded: string): string {
         let out = "";
         const key = parseInt(encoded.slice(0, 2), 16);
         for (let i = 2; encoded.length - i; i += 2) {
@@ -64,43 +96,36 @@
         }
         return out;
     }
-    function getDomain(url) {
+
+    function getDomain(url: string): string {
         const parts = new URL(url).host.toLowerCase().split(".");
         if (parts.length >= 3 && CCTLDS.has(parts[parts.length - 1])) {
             return parts[parts.length - 3];
         }
         return parts.length >= 2 ? parts[parts.length - 2] : parts[0];
     }
-    function normalizeSocialLink(raw) {
+
+    function normalizeSocialLink(raw: string): string {
         try {
             let url = raw;
-            if (url.startsWith("//"))
-                url = "https:" + url;
-            if (!url.startsWith("http"))
-                url = "https://" + url;
+            if (url.startsWith("//")) url = "https:" + url;
+            if (!url.startsWith("http")) url = "https://" + url;
             const parsed = new URL(url);
-            if (parsed.protocol === "http:" || parsed.protocol === "")
-                parsed.protocol = "https:";
-            if (parsed.host === "instagram.com")
-                parsed.host = "www.instagram.com";
-            if (parsed.host === "facebook.com")
-                parsed.host = "www.facebook.com";
-            if (parsed.host === "yelp.com")
-                parsed.host = "www.yelp.com";
-            if (parsed.host === "www.twitter.com")
-                parsed.host = "twitter.com";
-            if (parsed.host === "www.x.com")
-                parsed.host = "x.com";
-            if (parsed.pathname.endsWith("/"))
-                parsed.pathname = parsed.pathname.slice(0, -1);
+            if (parsed.protocol === "http:" || parsed.protocol === "") parsed.protocol = "https:";
+            if (parsed.host === "instagram.com") parsed.host = "www.instagram.com";
+            if (parsed.host === "facebook.com") parsed.host = "www.facebook.com";
+            if (parsed.host === "yelp.com") parsed.host = "www.yelp.com";
+            if (parsed.host === "www.twitter.com") parsed.host = "twitter.com";
+            if (parsed.host === "www.x.com") parsed.host = "x.com";
+            if (parsed.pathname.endsWith("/")) parsed.pathname = parsed.pathname.slice(0, -1);
             return BLACKLISTED_PATHS.has(parsed.pathname) ? "" : parsed.toString();
-        }
-        catch (err) {
+        } catch (err) {
             console.warn(timestamp(), "normalizeSocialLink error:", raw, err);
             return "";
         }
     }
-    async function fetchUrlContent(url, timeoutMs = FETCH_TIMEOUT_MS) {
+
+    async function fetchUrlContent(url: string, timeoutMs = FETCH_TIMEOUT_MS): Promise<string> {
         await acquireFetchSlot();
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -115,101 +140,96 @@
                 return "";
             }
             return await response.text();
-        }
-        catch (err) {
-            const e = err;
+        } catch (err) {
+            const e = err as Error;
             const reason = e.name === "AbortError" ? "timeout" : e.message;
             console.warn(timestamp(), `fetch error ${url}:`, reason);
             return "";
-        }
-        finally {
+        } finally {
             clearTimeout(timer);
             releaseFetchSlot();
         }
     }
-    function emptyResultSet() {
+
+    function emptyResultSet(): ResultSet {
         return {
-            instagram: new Set(),
-            facebook: new Set(),
-            youtube: new Set(),
-            linkedin: new Set(),
-            twitter: new Set(),
-            yelp: new Set(),
-            email: new Set(),
+            instagram: new Set<string>(),
+            facebook: new Set<string>(),
+            youtube: new Set<string>(),
+            linkedin: new Set<string>(),
+            twitter: new Set<string>(),
+            yelp: new Set<string>(),
+            email: new Set<string>(),
         };
     }
-    async function extractFromUrl(url, _name, deepSearch, visited = new Set()) {
+
+    async function extractFromUrl(url: string, _name: string, deepSearch: boolean, visited = new Set<string>()): Promise<ResultSet> {
         try {
             let target = url;
-            if (target.startsWith("//"))
-                target = "https:" + target;
-            if (!target.startsWith("http"))
-                target = "https://" + target;
-            if (visited.has(target))
-                return emptyResultSet();
+            if (target.startsWith("//")) target = "https:" + target;
+            if (!target.startsWith("http")) target = "https://" + target;
+
+            if (visited.has(target)) return emptyResultSet();
             visited.add(target);
+
             const html = await fetchUrlContent(target);
             if (!html || typeof html !== "string" || html.length < 10) {
                 return emptyResultSet();
             }
+
             const normalized = html.normalize("NFKC");
-            const contactLinks = new Set();
+            const contactLinks = new Set<string>();
             const matches = emptyResultSet();
+
             for (const platform in SOCIAL_MEDIA_PLATFORMS) {
                 const hits = normalized.match(SOCIAL_MEDIA_PLATFORMS[platform]);
-                if (!hits)
-                    continue;
+                if (!hits) continue;
                 hits.forEach((hit) => {
-                    if (!hit)
-                        return;
+                    if (!hit) return;
                     if (platform === "email") {
                         matches[platform].add(hit);
-                    }
-                    else {
+                    } else {
                         const normalizedLink = normalizeSocialLink(hit);
-                        if (normalizedLink)
-                            matches[platform].add(normalizedLink);
+                        if (normalizedLink) matches[platform].add(normalizedLink);
                     }
                 });
             }
-            let pageUrl;
+
+            let pageUrl: URL;
             try {
                 pageUrl = new URL(target);
-            }
-            catch (err) {
+            } catch (err) {
                 console.warn(timestamp(), "Invalid URL:", target, err);
                 return matches;
             }
-            const allLinks = [];
+
+            const allLinks: string[] = [];
             try {
                 for (const m of normalized.matchAll(/data-cfemail="([a-f0-9]+)"/gi)) {
-                    if (m[1])
-                        matches.email.add(decodeCloudflareEmail(m[1]));
+                    if (m[1]) matches.email.add(decodeCloudflareEmail(m[1]));
                 }
+
                 const anchorRe = /<a[^>]+href=["']([^"']+)["']/gi;
                 for (const m of normalized.matchAll(anchorRe)) {
                     try {
-                        if (m[1])
-                            allLinks.push(new URL(m[1], pageUrl).toString());
-                    }
-                    catch {
+                        if (m[1]) allLinks.push(new URL(m[1], pageUrl).toString());
+                    } catch {
                         /* skip malformed href */
                     }
                 }
-            }
-            catch (err) {
+            } catch (err) {
                 console.warn(timestamp(), "Link extraction error:", target, err);
             }
+
             for (const link of allLinks) {
                 try {
                     const path = new URL(link).pathname.toLowerCase();
-                    if (CONTACT_PAGE_PATHS.some((p) => path.includes(p)))
-                        contactLinks.add(link);
-                }
-                catch {
+                    if (CONTACT_PAGE_PATHS.some((p) => path.includes(p))) contactLinks.add(link);
+                } catch {
                     /* skip */
                 }
             }
+
             for (const link of allLinks) {
                 try {
                     const host = new URL(link).host.toLowerCase();
@@ -217,28 +237,26 @@
                         const isTwitter = platform === "twitter";
                         const matchesHost = isTwitter
                             ? ["twitter.com", "www.twitter.com", "x.com", "www.x.com"].includes(host) ||
-                                host.endsWith(".twitter.com") || host.endsWith(".x.com")
+                              host.endsWith(".twitter.com") || host.endsWith(".x.com")
                             : host === `${platform}.com` || host === `www.${platform}.com` || host.endsWith(`.${platform}.com`);
                         if (matchesHost) {
                             const normalizedLink = normalizeSocialLink(link);
-                            if (normalizedLink)
-                                matches[platform].add(normalizedLink);
+                            if (normalizedLink) matches[platform].add(normalizedLink);
                             break;
                         }
                     }
-                }
-                catch {
+                } catch {
                     /* skip */
                 }
             }
+
             if (deepSearch && contactLinks.size > 0) {
                 const contactList = [...contactLinks].slice(0, 20);
                 for (let i = 0; i < contactList.length; i += 10) {
                     const batch = contactList.slice(i, i + 10).map((link) => extractFromUrl(link, "", false, visited));
                     const results = await Promise.all(batch);
                     results.forEach((res) => {
-                        if (!res)
-                            return;
+                        if (!res) return;
                         for (const key in res) {
                             if (res[key] && typeof res[key].forEach === "function") {
                                 res[key].forEach((v) => matches[key].add(v));
@@ -247,48 +265,48 @@
                     });
                 }
             }
-            const allEmails = new Set();
-            const domainEmails = new Set();
-            let businessDomain = null;
+
+            const allEmails = new Set<string>();
+            const domainEmails = new Set<string>();
+            let businessDomain: string | null = null;
             try {
                 businessDomain = getDomain(target);
-            }
-            catch (err) {
+            } catch (err) {
                 console.warn(timestamp(), "getDomain error:", target, err);
             }
+
             matches.email.forEach((raw) => {
                 const cleaned = raw.replace("u003e", "").toLowerCase();
-                if (Array.from(EMAIL_BLACKLIST).some((bad) => cleaned.includes(bad)))
-                    return;
+                if (Array.from(EMAIL_BLACKLIST).some((bad) => cleaned.includes(bad))) return;
                 allEmails.add(cleaned);
-                if (businessDomain && cleaned.includes(businessDomain))
-                    domainEmails.add(cleaned);
+                if (businessDomain && cleaned.includes(businessDomain)) domainEmails.add(cleaned);
             });
             matches.email = domainEmails.size > 0 ? domainEmails : allEmails;
             return matches;
-        }
-        catch (err) {
+        } catch (err) {
             console.warn(timestamp(), `extractFromUrl error: ${url}`, err);
             return emptyResultSet();
         }
     }
-    chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+
+    chrome.runtime.onMessage.addListener((msg: BgMessage, _sender, sendResponse) => {
         switch (msg.action) {
             case "openPage":
                 chrome.storage.local.set({ leads: msg.data }, () => {
                     chrome.tabs.create({ url: "dashboard.html" });
                 });
                 return false;
+
             case "email":
                 (async () => {
                     const { website, name, deep_search } = msg.data;
                     const result = await extractFromUrl(website, name, deep_search);
-                    const out = {};
-                    for (const key in result)
-                        out[key] = Array.from(result[key]);
+                    const out: Record<string, string[]> = {};
+                    for (const key in result) out[key] = Array.from(result[key]);
                     sendResponse(out);
                 })();
                 return true;
+
             default:
                 return false;
         }
