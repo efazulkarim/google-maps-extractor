@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Lead List</title>
+    <link href="lib/tabulator/css/semantic-ui/tabulator_semantic-ui.min.css" rel="stylesheet" />
+    <link href="css/dashboard.css" rel="stylesheet" />
+    <script src="lib/tabulator/js/tabulator.min.js"></script>
+    <script src="lib/xlsx.full.min.js"></script>
+    <script src="lib/jquery-3.1.1.min.js"></script>
+</head>
+
+<body>
+    <div id="maincontent">
+        <div id="content">
+            <div style="display: flex; flex-direction: row; gap: 20px;">
+                <div style="display: flex; gap: 20px;">
+                    <button id="download-csv">Download CSV</button>
+                    <button id="download-xlsx">Download XLSX</button>
+                    <button id="download-json">Download JSON</button>
+                    <button id="clear-data">Clear Stored Leads</button>
+                </div>
+                <div><span id="accountinfo" style="font-weight: bold; font-size: 16px;"></span></div>
+            </div>
+            <div><span id="datastatus" style="color: red;"></span></div>
+            <div id="example-table"></div>
+        </div>
+    </div>
+    <script src="js/dashboard.js"></script>
+</body>
+
+</html>

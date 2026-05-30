@@ -1,0 +1,47 @@
+{
+    "manifest_version": 3,
+    "name": "Google Maps Scraper (Local)",
+    "version": "2.0.0",
+    "description": "Extract B2B local leads from Google Maps result pages and export to CSV/XLSX. Local-only fork.",
+    "icons": {
+        "16": "icons/icon16.png",
+        "32": "icons/icon32.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+    },
+    "content_scripts": [
+        {
+            "matches": ["*://*.google.*/maps/*"],
+            "js": ["contentScript2.js"],
+            "css": ["css/contentScript.css"],
+            "all_frames": false,
+            "run_at": "document_start"
+        },
+        {
+            "matches": ["*://*.google.*/maps/*"],
+            "js": ["contentScript.js"],
+            "css": ["css/contentScript.css"],
+            "all_frames": false,
+            "run_at": "document_end"
+        }
+    ],
+    "action": {
+        "default_icon": "icons/icon48.png",
+        "default_title": "Export Local Leads from Google Maps",
+        "default_popup": "popup.html"
+    },
+    "background": {
+        "service_worker": "bg.js"
+    },
+    "web_accessible_resources": [
+        {
+            "resources": ["dashboard.html", "injected.js", "css/*"],
+            "matches": ["<all_urls>"]
+        }
+    ],
+    "permissions": ["storage", "scripting"],
+    "host_permissions": ["*://*/*"],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self'"
+    }
+}
