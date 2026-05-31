@@ -2,9 +2,7 @@
 
 Chrome extension that extracts business leads from Google Maps search results and exports them to CSV, XLSX, or JSON. Runs fully locally — no remote auth, no quota gate, no telemetry.
 
-## About this fork
-
-Forked from [github.com/LeadGenerationTools/google-maps-extractor](https://github.com/LeadGenerationTools/google-maps-extractor) (Apache-2.0). This fork strips out everything that required a network round-trip to a vendor backend so the extension runs entirely on your machine. Removed:
+## About this repo
 
 - Remote authentication (login / token validation calls)
 - Quota gate (server-side row-count enforcement)
