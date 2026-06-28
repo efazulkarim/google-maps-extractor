@@ -7,8 +7,20 @@
         leads: [],
         placeIds: new Set(),
         collectEmail: true,
+        noWebsiteFilter: false,
         clearEpoch: 0,
     };
+    // Load filter flag from storage on startup and keep it synced.
+    chrome.storage.local.get("noWebsiteFilter", (storage) => {
+        STATE.noWebsiteFilter = Boolean(storage.noWebsiteFilter);
+        console.log("[GMS] noWebsiteFilter:", STATE.noWebsiteFilter);
+    });
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === "local" && changes.noWebsiteFilter) {
+            STATE.noWebsiteFilter = Boolean(changes.noWebsiteFilter.newValue);
+            console.log("[GMS] noWebsiteFilter changed:", STATE.noWebsiteFilter);
+        }
+    });
     const UI_HOST_SELECTORS = [".w6VYqd", "[role='main']"];
     const END_OF_RESULTS_SELECTORS = [".HlvSq", "p.fontBodyMedium span"];
     const FEED_SELECTOR = "[role='feed']";
@@ -233,6 +245,10 @@
                 const id = String(lead.placeID);
                 if (STATE.placeIds.has(id))
                     continue;
+                // "Only show businesses with NO website" filter:
+                // skip leads that have a website when the filter is on.
+                if (STATE.noWebsiteFilter && lead.website)
+                    continue;
                 STATE.placeIds.add(id);
                 fresh.push(lead);
             }
@@ -244,6 +260,11 @@
         const enriched = await enrichEmails(fresh);
         if (epoch !== STATE.clearEpoch)
             return;
+        // Mark empty websites for export display
+        for (const lead of enriched) {
+            if (!lead.website)
+                lead.website = "NO WEBSITE";
+        }
         STATE.leads.push(...enriched);
         const info = document.getElementById("extension_gms_leads_info");
         const exportBtn = document.getElementById("extension_gms_download_btn");

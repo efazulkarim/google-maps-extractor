@@ -64,6 +64,9 @@
             const leads: any[] = storage.leads || [];
             const fieldSet = new Set<string>();
             const rows = leads.map((lead) => {
+                // Ensure empty website values display as "NO WEBSITE" for
+                // leads that were stored before the filter feature existed.
+                if (!lead.website) lead.website = "NO WEBSITE";
                 const flat = flattenObject(lead);
                 Object.keys(flat).forEach((k) => fieldSet.add(k));
                 return flat;
